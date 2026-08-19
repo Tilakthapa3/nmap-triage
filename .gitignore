@@ -1,8 +1,7 @@
-venv/
+.env
+.env
+.env
 .venv/
 __pycache__/
-*.pyc
-.env
-*.key
-secrets.json
-.DS_Store
+*.xml
+nmap_triage_old.py
