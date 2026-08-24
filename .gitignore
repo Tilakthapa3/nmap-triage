@@ -3,3 +3,6 @@
 __pycache__/
 *.xml
 nmap_triage_old.py
+.env
+.env*
+!.env.example
