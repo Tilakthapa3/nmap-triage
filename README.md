@@ -13,11 +13,16 @@ Built as a learning project while studying for CompTIA Security+ and working thr
 - Parses standard Nmap XML (`nmap -oX`) — hosts, ports, services, versions
 - Sends structured findings to NVIDIA's hosted Nemotron model via the [build.nvidia.com](https://build.nvidia.com) API
 - Returns a severity-ranked triage report with reasoning and remediation guidance
+<<<<<<< HEAD
 - Optionally ships findings to [Axiom](https://axiom.co) for run history and cross-scan querying
 - Runs entirely from the command line, no dashboard required
 
 Model: `nvidia/nemotron-3-ultra-550b-a55b`
 
+=======
+- Runs entirely from the command line, no dashboard required
+
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 ## Why
 
 Junior analysts get handed scan output and are expected to know what matters. An open port 22 running a patched OpenSSH is noise; port 445 exposed to the internet is not. This tool is an attempt to encode that first-pass judgment so the analyst starts from a ranked list instead of a wall of XML.
@@ -29,15 +34,25 @@ Junior analysts get handed scan output and are expected to know what matters. An
 - Python 3.9+
 - Nmap 7.9+ (to generate the input XML)
 - An API key from [build.nvidia.com](https://build.nvidia.com) (free tier available)
+<<<<<<< HEAD
 - An [Axiom](https://axiom.co) token — optional, only needed for log ingestion
+=======
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 
 ## Setup
 
 ```bash
 git clone https://github.com/Tilakthapa3/nmap-triage.git
 cd nmap-triage
+<<<<<<< HEAD
 python3 -m venv .venv
 source .venv/bin/activate
+=======
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 pip install -r requirements.txt
 ```
 
@@ -45,14 +60,20 @@ Create a `.env` file in the project root:
 
 ```
 NVIDIA_API_KEY=your_key_here
+<<<<<<< HEAD
 AXIOM_TOKEN=your_axiom_token
 AXIOM_DATASET=nmap-triage
+=======
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 ```
 
 `.env` is gitignored. Never commit your key.
 
+<<<<<<< HEAD
 Only `NVIDIA_API_KEY` is required. Omit the Axiom variables and run with `--no-axiom` if you don't need ingestion.
 
+=======
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 ## Usage
 
 Generate a scan:
@@ -67,6 +88,7 @@ Run the triage:
 python nmap_triage.py scan.xml
 ```
 
+<<<<<<< HEAD
 ### Options
 
 | Flag | Effect |
@@ -111,6 +133,28 @@ Open ports total:         4
   This Nmap testing service reflects traffic and can be abused for amplification or reconnaissance. Disable the service unless explicitly required for authorized network testing.
 
 No other findings.
+=======
+> Only scan hosts you own or have written permission to test. `scanme.nmap.org` is provided by the Nmap project for exactly this purpose.
+
+---
+
+## Example output
+
+```
+Host: 45.33.32.156 (scanme.nmap.org)
+
+[HIGH]   port 22/tcp — OpenSSH 6.6.1p1
+         Outdated SSH version with known CVEs. Exposed to the public internet.
+         → Upgrade OpenSSH, disable password auth, restrict source IPs.
+
+[MEDIUM] port 80/tcp — Apache httpd 2.4.7
+         Web server version disclosed in banner; version is end-of-life.
+         → Upgrade Apache, suppress ServerTokens in config.
+
+[LOW]    port 9929/tcp — Nping echo
+         Diagnostic service, low exposure risk.
+         → Confirm intentional; close if unused.
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 ```
 
 ---
@@ -118,6 +162,10 @@ No other findings.
 ## Roadmap
 
 - [ ] Map findings to NIST 800-53 / CIS control IDs
+<<<<<<< HEAD
+=======
+- [ ] Ship log ingestion via [Axiom](https://axiom.co) for run history and observability
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 - [ ] JSON and Markdown export for reporting
 - [ ] Batch mode for multi-host scans
 
@@ -128,5 +176,8 @@ This is a portfolio and learning project, not a production security tool. LLM ou
 ## Author
 
 **Tilak Thapa** — M.S. Cybersecurity, Avila University
+<<<<<<< HEAD
 
+=======
+>>>>>>> 9f9a0b04213f69bc290936af85443ef3f1a823f7
 [tilakthapa.com](https://tilakthapa.com) · [github.com/Tilakthapa3](https://github.com/Tilakthapa3)
