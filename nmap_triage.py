@@ -38,7 +38,7 @@ except ImportError:
 
 
 API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-DEFAULT_MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
+DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 AXIOM_DATASET = os.environ.get("AXIOM_DATASET", "nmap-triage")
 
 # Matches the model's finding header, e.g.

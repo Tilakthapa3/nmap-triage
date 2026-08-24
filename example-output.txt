@@ -1,0 +1,10 @@
+=== Scan Summary ===
+Hosts up with open ports: 1
+Open ports total:         4
+
+45.33.32.156 (scanme.nmap.org)
+  22/tcp  ssh — OpenSSH 6.6.1p1 Ubuntu 2ubuntu2.13
+  80/tcp  http — Apache httpd 2.4.7
+  9929/tcp  nping-echo — Nping echo
+  31337/tcp  tcpwrapped
+
