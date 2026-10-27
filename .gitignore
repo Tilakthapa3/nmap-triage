@@ -6,3 +6,6 @@ nmap_triage_old.py
 .env
 .env*
 !.env.example
+
+# Sample scans ship with the repo
+!samples/*.xml

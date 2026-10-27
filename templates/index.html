@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nmap-triage</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M8 2h22v28H8L2 24V8z' fill='%23ff6a5c'/%3E%3Ccircle cx='9' cy='16' r='3' fill='%23133761'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+
+{% macro options() %}
+  <fieldset class="options">
+    <legend class="visually-hidden">Options</legend>
+    {% set ai_on = form.ai if 'ai' in form else ai_available %}
+    <label class="choice">
+      <input type="checkbox" name="ai"{% if ai_on and ai_available %} checked{% endif %}{% if not ai_available %} disabled{% endif %}>
+      <span>AI triage with NVIDIA Nemotron</span>
+    </label>
+    {% if not ai_available %}
+      <p class="hint">
+        {% if public_mode %}AI triage isn't set up on this demo, so ports are listed without ranks.
+        {% else %}Add <code>NVIDIA_API_KEY</code> to your <code>.env</code> file and restart the app to turn this on.{% endif %}
+      </p>
+    {% endif %}
+    {% if axiom_available %}
+      {% set axiom_on = form.axiom if 'axiom' in form else true %}
+      <label class="choice">
+        <input type="checkbox" name="axiom"{% if axiom_on %} checked{% endif %}>
+        <span>Log findings to Axiom</span>
+      </label>
+    {% endif %}
+  </fieldset>
+{% endmacro %}
+
+<header class="masthead wrap">
+  <h1 class="masthead__name">nmap-triage</h1>
+  <p class="masthead__lede">Rank the open ports in an Nmap scan and see what to fix first.</p>
+  <p class="masthead__mode">
+    {% if public_mode %}Online demo. Scanning is turned off here, so the site can't be used to scan systems without permission.
+    {% else %}Running on this computer at 127.0.0.1. Nothing on your network can reach it.{% endif %}
+  </p>
+</header>
+
+<main class="wrap">
+
+  {% if error %}<div class="alert alert--error" role="alert">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="alert" role="status">{{ notice }}</div>{% endif %}
+
+  <section class="intake" aria-label="Choose a scan">
+    {% if not public_mode %}
+      <div class="switch">
+        <button type="button" class="switch__btn" data-switch="upload" aria-controls="panel-upload" aria-pressed="{{ 'false' if tab == 'scan' else 'true' }}">Upload a scan</button>
+        <button type="button" class="switch__btn" data-switch="scan" aria-controls="panel-scan" aria-pressed="{{ 'true' if tab == 'scan' else 'false' }}">Run a scan</button>
+      </div>
+    {% endif %}
+
+    <form id="panel-upload" class="panel" method="post" action="{{ url_for('analyze_upload') }}"
+          enctype="multipart/form-data" data-busy="Analyzing the scan"{% if tab == 'scan' %} hidden{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="drop" for="scan-file">
+        <input id="scan-file" class="drop__input" type="file" name="scan" accept=".xml,text/xml,application/xml">
+        <span class="drop__title">Choose an Nmap XML file</span>
+        <span class="drop__hint">or drop it here. Make one with <code>nmap -sV -oX scan.xml &lt;target&gt;</code></span>
+        <span class="drop__file" data-file-name hidden></span>
+      </label>
+      {{ options() }}
+      <div class="actions">
+        <button class="btn btn--primary" type="submit" data-needs-file>Analyze scan</button>
+        <button class="btn" type="submit" name="sample" value="1">Try the sample scan</button>
+      </div>
+      <p class="hint">The sample is the scanme.nmap.org scan from the README. Uploads can be up to {{ max_upload_mb }} MB and aren't kept after they're read.</p>
+    </form>
+
+    {% if not public_mode %}
+      <form id="panel-scan" class="panel" method="post" action="{{ url_for('scan_and_analyze') }}"
+            data-busy="Scanning"{% if tab != 'scan' %} hidden{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="field">
+          <label class="field__label" for="target">Target</label>
+          <input id="target" class="field__input" name="target" type="text" required
+                 value="{{ form.target or 'scanme.nmap.org' }}"
+                 autocomplete="off" autocapitalize="off" spellcheck="false">
+          <p class="hint">One hostname, IP address, or range up to a /24.</p>
+        </div>
+        <fieldset class="field">
+          <legend class="field__label">Scan size</legend>
+          <label class="choice">
+            <input type="radio" name="size" value="standard"{% if form.size != 'quick' %} checked{% endif %}>
+            <span>Standard: top 1,000 ports</span>
+          </label>
+          <label class="choice">
+            <input type="radio" name="size" value="quick"{% if form.size == 'quick' %} checked{% endif %}>
+            <span>Quick: top 100 ports. Faster, but can miss services.</span>
+          </label>
+        </fieldset>
+        <label class="choice choice--confirm">
+          <input type="checkbox" name="permission" value="yes" required>
+          <span>I own this target or have written permission to scan it.</span>
+        </label>
+        <p class="hint">scanme.nmap.org is run by the Nmap project for practice scans.</p>
+        {{ options() }}
+        <div class="actions">
+          <button class="btn btn--primary" type="submit"{% if not nmap_available %} disabled{% endif %}>Scan and analyze</button>
+        </div>
+        {% if not nmap_available %}
+          <p class="hint hint--warn">Nmap isn't installed. Install it with <code>brew install nmap</code>, then restart the app.</p>
+        {% else %}
+          <p class="hint">Each scan is saved in the <code>scans</code> folder.</p>
+        {% endif %}
+      </form>
+    {% endif %}
+  </section>
+
+  {% if result %}
+    <section class="results" id="results" aria-labelledby="results-title">
+      <div class="results__head">
+        <h2 class="results__source" id="results-title">{{ result.source }}</h2>
+        <p class="results__summary">
+          {{ result.port_count }} open port{{ 's' if result.port_count != 1 }} on {{ result.host_count }} host{{ 's' if result.host_count != 1 }}.
+          {% if result.ai_used %}{{ result.counts.HIGH }} high, {{ result.counts.MEDIUM }} medium, {{ result.counts.LOW }} low.
+          {% else %}AI triage was off, so the ports aren't ranked.{% endif %}
+        </p>
+        {% if result.saved_to %}<p class="hint">Scan saved as <code>{{ result.saved_to }}</code>.</p>{% endif %}
+      </div>
+
+      {% if result.ai_error %}<div class="alert alert--warn" role="alert">{{ result.ai_error }}</div>{% endif %}
+
+      {% if result.ai_used %}
+        <div class="board" aria-label="Triage board: open ports grouped by severity">
+          {% for lane in result.lanes %}
+            {% set level = (lane.severity or 'none')|lower %}
+            <div class="lane lane--{{ level }}">
+              <p class="lane__label">
+                <span class="lane__name">{{ lane.severity or 'Not flagged' }}</span>
+                <span class="lane__count">{{ lane.rows|length }}</span>
+              </p>
+              <ul class="lane__ports">
+                {% for r in lane.rows %}
+                  <li>
+                    {% if r.anchor %}<a class="chip" href="#{{ r.anchor }}">{% else %}<span class="chip">{% endif %}
+                      <span class="chip__port">{{ r.port }}/{{ r.protocol }}</span>
+                      <span class="chip__service">{{ r.service }}</span>
+                    {% if r.anchor %}</a>{% else %}</span>{% endif %}
+                  </li>
+                {% else %}
+                  <li class="lane__empty">None</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endfor %}
+        </div>
+
+        <h2 class="section-title">What to fix first</h2>
+        {% if result.findings %}
+          <ol class="tags">
+            {% for f in result.findings %}
+              <li class="tag tag--{{ f.severity|lower }}" id="{{ f.anchor }}">
+                <div class="tag__strip">
+                  <span class="tag__hole" aria-hidden="true"></span>
+                  <span class="tag__severity">{{ f.severity }}</span>
+                </div>
+                <div class="tag__body">
+                  <p class="tag__target">{{ f.target }}</p>
+                  {% if f.service %}
+                    <p class="tag__service">{{ f.service }}{% if f.version %} <span class="tag__version">{{ f.version }}</span>{% endif %}</p>
+                  {% endif %}
+                  <p class="tag__text">{% for part in f.parts %}{% if loop.index is even %}<code>{{ part }}</code>{% else %}{{ part }}{% endif %}{% endfor %}</p>
+                </div>
+              </li>
+            {% endfor %}
+          </ol>
+          {% for note in result.notes %}<p class="note">{{ note }}</p>{% endfor %}
+        {% else %}
+          <p>The AI's reply didn't follow the expected format. Here it is as written:</p>
+          <pre class="raw">{{ result.triage }}</pre>
+        {% endif %}
+      {% endif %}
+
+      <h2 class="section-title">All open ports</h2>
+      <div class="table-wrap">
+        <table class="ports">
+          <thead>
+            <tr>
+              <th scope="col">Host</th>
+              <th scope="col">Port</th>
+              <th scope="col">State</th>
+              <th scope="col">Service</th>
+              <th scope="col">Version</th>
+              {% if result.ai_used %}<th scope="col">Triage</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in result.rows %}
+              <tr>
+                <td>{{ r.address }}{% if r.hostname %}<span class="ports__hostname">{{ r.hostname }}</span>{% endif %}</td>
+                <td>{{ r.port }}/{{ r.protocol }}</td>
+                <td>open</td>
+                <td>{{ r.service }}</td>
+                <td>{{ r.version }}</td>
+                {% if result.ai_used %}
+                  <td>{% if r.severity %}<span class="sev sev--{{ r.severity|lower }}">{{ r.severity }}</span>{% else %}<span class="ports__none">not flagged</span>{% endif %}</td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="downloads">
+        <p class="downloads__label">Download</p>
+        <button class="btn" type="button" data-download="md">Markdown report</button>
+        <button class="btn" type="button" data-download="json">JSON findings</button>
+        <button class="btn" type="button" data-download="txt">Plain-text report</button>
+      </div>
+      {% if result.axiom_message %}
+        <p class="hint{{ '' if result.axiom_ok else ' hint--warn' }}">{{ result.axiom_message }}</p>
+      {% endif %}
+      <script type="application/json" id="report-data">{{ result.downloads|tojson }}</script>
+    </section>
+  {% endif %}
+
+</main>
+
+<footer class="footer wrap">
+  <p>AI triage can be wrong. Check each finding before you act on it.</p>
+  <p><a href="{{ repo_url }}">Source code on GitHub</a></p>
+</footer>
+
+<div class="busy" data-busy-overlay hidden>
+  <div class="busy__panel" role="status" aria-live="polite">
+    <p class="busy__title" data-busy-title>Working</p>
+    <p class="busy__time" data-busy-time>0:00</p>
+    <div class="busy__bar" aria-hidden="true"><span></span></div>
+    <p class="hint" data-busy-hint></p>
+  </div>
+</div>
+
+</body>
+</html>

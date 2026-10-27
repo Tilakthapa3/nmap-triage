@@ -16,3 +16,7 @@ requests-toolbelt==1.0.0
 typing_extensions==4.16.0
 ujson==5.11.0
 urllib3==2.6.3
+
+# Web app (app.py)
+defusedxml>=0.7.1
+flask>=3.0
