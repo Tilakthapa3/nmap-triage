@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sample Nmap XML output (scanme.nmap.org) for trying --no-ai without running Nmap:
+     python nmap_triage.py examples/scanme.xml --no-ai --no-axiom -->
+<nmaprun scanner="nmap" args="nmap -oX scanme.xml scanme.nmap.org" version="7.94">
+<host>
+<status state="up" reason="echo-reply"/>
+<address addr="45.33.32.156" addrtype="ipv4"/>
+<hostnames><hostname name="scanme.nmap.org" type="PTR"/></hostnames>
+<ports>
+<port protocol="tcp" portid="22"><state state="open" reason="syn-ack"/><service name="ssh" product="OpenSSH" version="8.9p1"/></port>
+<port protocol="tcp" portid="80"><state state="open" reason="syn-ack"/><service name="http" product="Apache httpd" version="2.4.52"/></port>
+<port protocol="tcp" portid="9929"><state state="open" reason="syn-ack"/><service name="nping-echo" product="Nping"/></port>
+</ports>
+</host>
+</nmaprun>
