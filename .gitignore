@@ -2,7 +2,6 @@
 .venv/
 __pycache__/
 *.xml
-nmap_triage_old.py
-.env
+!examples/*.xml
 .env*
 !.env.example
