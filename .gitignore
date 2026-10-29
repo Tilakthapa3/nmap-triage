@@ -5,3 +5,6 @@ __pycache__/
 !examples/*.xml
 .env*
 !.env.example
+
+# Sample scans ship with the repo
+!samples/*.xml
