@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Sample Nmap XML output (scanme.nmap.org) for trying --no-ai without running Nmap:
-     python nmap_triage.py examples/scanme.xml --no-ai --no-axiom -->
+<!-- Sample Nmap XML output (scanme.nmap.org) for offline parser testing
+     without running Nmap. Run the CLI on this file with the no-ai and
+     no-axiom flags. -->
 <nmaprun scanner="nmap" args="nmap -oX scanme.xml scanme.nmap.org" version="7.94">
 <host>
 <status state="up" reason="echo-reply"/>

@@ -12,6 +12,8 @@ Usage:
     python nmap_triage.py scan.xml --output report.md
     python nmap_triage.py scan.xml --no-ai
     python nmap_triage.py scan.xml --no-axiom
+    python nmap_triage.py scan.xml --no-ai --format json --output report.json
+    python nmap_triage.py scan.xml --no-ai --format markdown
 """
 
 import argparse
@@ -44,6 +46,50 @@ AXIOM_DATASET = os.environ.get("AXIOM_DATASET", "nmap-triage")
 # Matches the model's finding header, e.g.
 #   [HIGH] 192.168.1.10:445 — microsoft-ds (Samba 3.0.20)
 SEVERITY_LINE = re.compile(r"^\s*\[(HIGH|MEDIUM|LOW)\]\s+(\S+?):(\d+)")
+
+# Offline first-pass guidance for the structured (JSON/Markdown) exports
+# only. These are heuristics, not vulnerability verdicts: a severity here
+# is a starting point for analysis, never a substitute for it. The
+# default text report is unaffected by this table.
+SERVICE_GUIDANCE = {
+    "microsoft-ds": ("HIGH", "SMB is a common lateral-movement target. Restrict port 445 to trusted hosts, disable SMBv1, and confirm the version is patched."),
+    "netbios-ssn": ("HIGH", "NetBIOS session service. Restrict to trusted hosts and disable it if not required."),
+    "ms-wbt-server": ("HIGH", "RDP exposed to the network is a common initial-access vector. Require VPN access and MFA, and confirm the version is patched."),
+    "ftp": ("HIGH", "FTP sends credentials in cleartext. Replace it with SFTP or FTPS, or disable it if not required."),
+    "telnet": ("HIGH", "Telnet sends credentials in cleartext. Disable it and use SSH instead."),
+    "mysql": ("HIGH", "A database port should never face untrusted networks. Restrict it to the application hosts and confirm the version is patched."),
+    "postgresql": ("HIGH", "A database port should never face untrusted networks. Restrict it to the application hosts and confirm the version is patched."),
+    "mongodb": ("HIGH", "MongoDB has shipped with weak defaults historically. Restrict it to the application hosts, require authentication, and confirm the version is patched."),
+    "redis": ("HIGH", "Redis has no authentication by default. Bind it to localhost or trusted hosts only and require authentication."),
+    "elasticsearch": ("HIGH", "Elasticsearch has shipped open by default historically. Restrict it to trusted hosts, require authentication, and confirm the version is patched."),
+    "ssh": ("MEDIUM", "Confirm the version is patched and supported, disable password authentication where possible, and restrict access to trusted hosts."),
+    "http": ("MEDIUM", "Confirm the web server version is patched and supported, and redirect traffic to HTTPS."),
+    "smtp": ("MEDIUM", "Confirm the mail service is patched and verify it is not acting as an open relay."),
+    "snmp": ("MEDIUM", "Use SNMPv3 with authentication and encryption; disable SNMPv1/v2c community strings."),
+    "domain": ("LOW", "Confirm the DNS service is patched and is only exposed where intended."),
+    "https": ("LOW", "Confirm the TLS configuration and certificate are current and the server version is patched."),
+}
+
+PORT_GUIDANCE = {
+    31337: ("HIGH", "Port 31337 is historically associated with backdoor trojans, and the tcpwrapped label suggests access controls hiding the true service. Identify the listening process and remove it if unauthorized."),
+}
+
+DEFAULT_GUIDANCE = ("LOW", "Review whether this service needs to be exposed, and confirm the version is patched and supported.")
+
+
+def assess_finding(service, port):
+    """Heuristic (severity, remediation) for one open port.
+
+    Used only by the structured exports. When an AI triage ran, the
+    model's severity overrides this; the remediation text always comes
+    from here so structured exports stay deterministic.
+    """
+    name = (service or "").lower()
+    if name in SERVICE_GUIDANCE:
+        return SERVICE_GUIDANCE[name]
+    if port in PORT_GUIDANCE:
+        return PORT_GUIDANCE[port]
+    return DEFAULT_GUIDANCE
 
 SYSTEM_PROMPT = """You are a security analyst triaging the results of an Nmap scan.
 
@@ -231,6 +277,98 @@ def build_events(hosts, scan_file, triage_text=None):
     return events, run_id
 
 
+def build_findings(hosts, triage_text=None):
+    """One structured finding per open port.
+
+    Severity comes from the AI triage when one ran; otherwise from the
+    offline heuristic. Remediation always comes from the heuristic, so
+    structured exports are deterministic.
+    """
+    severities = extract_severities(triage_text)
+    findings = []
+    for host in hosts:
+        for port in host["open_ports"]:
+            severity, remediation = assess_finding(port["service"],
+                                                   port["port"])
+            severity = severities.get((host["address"], port["port"]),
+                                      severity)
+            findings.append({
+                "host": host["address"],
+                "hostname": host["hostname"],
+                "port": port["port"],
+                "protocol": port["protocol"],
+                "service": port["service"],
+                "version": port["version"],
+                "severity": severity,
+                "remediation": remediation,
+            })
+    return findings
+
+
+def render_json_report(hosts, scan_file, triage_text, report):
+    """Structured report: metadata + findings + the full text report."""
+    findings = build_findings(hosts, triage_text)
+    document = {
+        "tool": "nmap-triage",
+        "scan_file": os.path.basename(scan_file),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "hosts_up": len(hosts),
+        "open_ports_total": sum(len(h["open_ports"]) for h in hosts),
+        "ai_triaged": bool(triage_text),
+        "findings": findings,
+        "triage": triage_text,
+        "report": report,
+    }
+    return json.dumps(document, indent=2) + "\n"
+
+
+def _md_cell(value):
+    return str(value if value is not None else "—").replace("|", "\\|")
+
+
+def render_markdown_report(hosts, scan_file, triage_text, summary):
+    """Readable report: headings, a findings table, and the raw summary."""
+    findings = build_findings(hosts, triage_text)
+    total = sum(len(h["open_ports"]) for h in hosts)
+    lines = [
+        "# Nmap Triage Report",
+        "",
+        f"Scan file: `{os.path.basename(scan_file)}`",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Hosts up: {len(hosts)} · Open ports: {total} · "
+        f"AI triaged: {'yes' if triage_text else 'no'}",
+        "",
+        "## Findings",
+        "",
+        "| Severity | Host | Port | Service | Version | Remediation |",
+        "|---|---|---|---|---|---|",
+    ]
+    for f in findings:
+        lines.append(
+            "| {severity} | {host} | {port} | {service} | {version} | {remediation} |".format(
+                severity=_md_cell(f["severity"]),
+                host=_md_cell(f["host"]),
+                port=_md_cell(f"{f['port']}/{f['protocol']}"),
+                service=_md_cell(f["service"]),
+                version=_md_cell(f["version"]),
+                remediation=_md_cell(f["remediation"]),
+            )
+        )
+    lines += [
+        "",
+        "## Scan Summary",
+        "",
+        "```",
+        summary.rstrip("\n"),
+        "```",
+        "",
+        "## AI Triage",
+        "",
+        triage_text if triage_text else "Skipped (--no-ai).",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def ship_to_axiom(events):
     """Send events to Axiom. Returns an error string, or None on success.
 
@@ -263,6 +401,9 @@ def main():
     )
     ap.add_argument("xmlfile", help="Nmap XML file (from: nmap -oX)")
     ap.add_argument("--output", help="Write the report to this file")
+    ap.add_argument("--format", choices=["text", "json", "markdown"],
+                    default="text",
+                    help="Report format: text (default), json, or markdown")
     ap.add_argument("--model", default=DEFAULT_MODEL, help="Model ID to use")
     ap.add_argument("--no-ai", action="store_true",
                     help="Parse and summarize only, skip the API call")
@@ -306,12 +447,20 @@ def main():
                   f"(dataset: {AXIOM_DATASET}, run_id: {run_id})",
                   file=sys.stderr)
 
+    if args.format == "json":
+        document = render_json_report(hosts, args.xmlfile, triage, report)
+    elif args.format == "markdown":
+        document = render_markdown_report(hosts, args.xmlfile, triage,
+                                          summary)
+    else:
+        document = report
+
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write(report)
+            f.write(document)
         print(f"Report written to {args.output}")
     else:
-        print(report)
+        print(document)
 
 
 if __name__ == "__main__":

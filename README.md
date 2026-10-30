@@ -72,8 +72,18 @@ python nmap_triage.py scan.xml
 | Flag | Effect |
 |------|--------|
 | `--output FILE` | Write the report to a file instead of stdout |
+| `--format FORMAT` | Report format: `text` (default), `json`, or `markdown` |
 | `--no-ai` | Parse and print findings only — no API call, no key needed |
 | `--no-axiom` | Skip Axiom ingestion for this run |
+
+### Export formats
+
+`--format json` writes a structured document (scan metadata plus one finding per open port with host, port, service, severity, and remediation), and `--format markdown` writes a readable report with a findings table. Both work with `--output FILE` or to stdout. Severities in structured exports come from the AI triage when one ran, and from a built-in service heuristic otherwise; the default text output is unchanged.
+
+```bash
+python nmap_triage.py scan.xml --no-ai --format json --output report.json
+python nmap_triage.py scan.xml --no-ai --format markdown
+```
 
 `--no-ai` is the fastest way to confirm the parser works against your XML before setting up any credentials.
 
@@ -115,10 +125,22 @@ No other findings.
 
 ---
 
+## Testing
+
+Tests use only the Python standard library:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+They cover XML parsing, severity assignment, and the JSON/Markdown exporters, using the bundled `examples/scanme.xml` sample. Importing the test module requires `requests` (listed in `requirements.txt`); nothing else third-party is needed.
+
+---
+
 ## Roadmap
 
 - [ ] Map findings to NIST 800-53 / CIS control IDs
-- [ ] JSON and Markdown export for reporting
+- [x] JSON and Markdown export for reporting
 - [ ] Batch mode for multi-host scans
 
 ## Notes
